@@ -1,0 +1,1056 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Agent call sheet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.9.3/confetti.browser.min.js"></script>
+  <style>
+    :root {
+      --bg: #eff6ff; --card: #ffffff;
+      --border: #94a3b8; --border-strong: #475569;
+      --text: #0f172a; --muted: #475569; --hint: #64748b;
+      --accent: #4f46e5; --accent-hover: #4338ca; --accent-bg: #eef2ff; --accent-soft: #e0e7ff;
+      --success: #047857; --success-bg: #ecfdf5;
+      --danger: #be123c; --danger-bg: #fff1f2;
+      --warn: #b45309; --warn-bg: #fffbeb;
+      --info: #0369a1; --info-bg: #f0f9ff;
+      --pink: #9d174d; --pink-bg: #fdf2f8;
+      --purple: #6d28d9; --purple-bg: #f5f3ff;
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+      --shadow-md: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+      --shadow-lg: 0 4px 12px rgba(15, 23, 42, 0.06), 0 2px 4px rgba(15, 23, 42, 0.04);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+      background: var(--bg);
+    }
+    /* Note: do NOT set overflow on html/body — that breaks position: sticky. */
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 24px 80px; }
+    /* Only the progress bar stays pinned as the user scrolls — everything above it scrolls normally. */
+    .progress.sticky-progress {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      margin-bottom: 14px;
+    }
+    .progress.sticky-progress::after {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; bottom: -12px;
+      height: 12px;
+      background: linear-gradient(to bottom, var(--bg), transparent);
+      pointer-events: none;
+    }
+
+    .topbar { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+    .topbar h1 {
+      font-size: 26px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      letter-spacing: -0.025em;
+      color: var(--text);
+    }
+    .topbar .sub { font-size: 13px; color: var(--muted); margin: 0; font-weight: 500; }
+    .filters > label:not(.filter-chip) { font-weight: 700; color: var(--text); }
+    .bucket-bar > label { font-weight: 700; color: var(--text); }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      font: inherit;
+      cursor: pointer;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border-strong);
+      background: var(--card);
+      color: var(--text);
+      font-weight: 500;
+      transition: all 0.15s ease;
+      box-shadow: var(--shadow-sm);
+    }
+    button:hover { background: #fafbfc; border-color: rgba(15, 23, 42, 0.18); box-shadow: var(--shadow-md); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+    #btn-refresh {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      box-shadow: 0 1px 2px rgba(79, 70, 229, 0.25), inset 0 1px 0 rgba(255,255,255,0.15);
+    }
+    #btn-refresh:hover { background: var(--accent-hover); border-color: var(--accent-hover); box-shadow: 0 3px 8px rgba(79, 70, 229, 0.35); }
+
+    .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 12px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; box-shadow: var(--shadow-sm); }
+    .filters label { font-size: 12px; color: var(--muted); }
+    .filters input[type="text"] { padding: 6px 10px; border: 0.5px solid var(--border-strong); border-radius: 6px; font: inherit; min-width: 220px; }
+    .filter-clear { font-size: 12px; color: var(--muted); background: transparent; border: none; padding: 4px 8px; cursor: pointer; }
+    .filter-clear:hover { color: var(--text); }
+    .filter-spacer { flex: 1; }
+    .filter-stats { font-size: 12px; color: var(--muted); }
+    .filter-divider { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+    .filter-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--card); font-size: 12px; font-weight: 500; cursor: pointer; user-select: none; transition: all 0.15s ease; }
+    .filter-chip:hover { background: #f8f9fc; border-color: var(--accent-soft); }
+    .filter-chip input { margin: 0; cursor: pointer; accent-color: var(--accent); }
+    .filter-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 1px 2px rgba(79, 70, 229, 0.2); }
+    .filter-chip.active input { accent-color: #fff; }
+
+    .banner { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
+    .banner.dry { background: var(--warn-bg); color: var(--warn); }
+    .banner.error { background: var(--danger-bg); color: var(--danger); white-space: pre-wrap; }
+
+    .progress { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; padding: 14px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; font-size: 13px; box-shadow: var(--shadow-sm); }
+    .progress .prog-main { display: flex; align-items: center; gap: 14px; }
+    .progress .bar { flex: 1; height: 6px; background: #eef0f6; border-radius: 999px; overflow: hidden; }
+    .progress .bar > div { height: 100%; background: linear-gradient(90deg, var(--accent) 0%, #7c3aed 100%); border-radius: 999px; transition: width 0.3s ease; }
+    .progress .count { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; }
+    .affirmation { font-size: 13px; line-height: 1.4; min-height: 18px; transition: color 0.2s; }
+    .affirmation:empty { display: none; }
+    .affirmation.hint { color: var(--muted); font-style: italic; }
+    .affirmation.encourage { color: var(--accent); font-weight: 600; }
+    .affirmation.celebrate {
+      color: var(--success);
+      font-weight: 700;
+      background: var(--success-bg);
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #a7f3d0;
+      display: inline-block;
+      align-self: flex-start;
+    }
+
+    .list { display: flex; flex-direction: column; gap: 10px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: all 0.18s ease;
+      box-shadow: var(--shadow-sm);
+      flex-shrink: 0; /* don't let flex parent squash cards to fit max-height — let them overflow instead */
+    }
+    .card:hover {
+      border-color: var(--accent-soft);
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-1px);
+    }
+    .card.called { opacity: 0.5; }
+    .card.called:hover { transform: none; box-shadow: var(--shadow-sm); }
+    .skip-btn { font-size: 12px; color: var(--muted); box-shadow: none; }
+    .skip-btn:hover { background: #f1f5f9; color: var(--text); box-shadow: none; }
+    .skip-btn.on { background: #f1f5f9; color: var(--text); border-color: var(--border-strong); }
+    .card.skipped { opacity: 0.68; background: #fafbfc; }
+    .card.skipped .photo { filter: grayscale(0.3); }
+    .skipped-badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 999px; margin-left: 8px; background: #f1f5f9; color: var(--muted); border: 1px solid var(--border); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; vertical-align: middle; }
+    .bucket-bar .bucket-tab { font-size: 13px; padding: 7px 14px; display: inline-flex; align-items: center; gap: 7px; }
+    .bucket-bar .bucket-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 1px 2px rgba(79, 70, 229, 0.2); }
+    .bucket-count { font-size: 11px; font-weight: 600; color: var(--muted); background: #eef0f6; padding: 1px 7px; border-radius: 999px; min-width: 18px; text-align: center; }
+    .bucket-tab.active .bucket-count { background: rgba(255,255,255,0.2); color: #fff; }
+    .bucket-btns { display: inline-flex; gap: 4px; }
+    .bucket-btns button { font-size: 12px; padding: 6px 10px; box-shadow: none; }
+    .bucket-btn-warm:hover { background: #fffbeb; border-color: #f59e0b; color: #b45309; }
+    .bucket-btn-nurture:hover { background: #ecfeff; border-color: #06b6d4; color: #155e75; }
+    .bucket-btn-hot:hover { background: #fff1f2; border-color: #f43f5e; color: #be123c; }
+    .bucket-btn-warm.on { background: #f59e0b; border-color: #f59e0b; color: #fff; box-shadow: 0 1px 2px rgba(245, 158, 11, 0.25); }
+    .bucket-btn-nurture.on { background: #06b6d4; border-color: #06b6d4; color: #fff; box-shadow: 0 1px 2px rgba(6, 182, 212, 0.25); }
+    .bucket-btn-hot.on { background: #f43f5e; border-color: #f43f5e; color: #fff; box-shadow: 0 1px 2px rgba(244, 63, 94, 0.25); }
+    .bucket-badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 999px; margin-left: 8px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; vertical-align: middle; }
+    .bucket-badge.warm { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+    .bucket-badge.nurture { background: #ecfeff; color: #155e75; border: 1px solid #a5f3fc; }
+    .bucket-badge.hot { background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
+    .undo-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 13px; display: flex; align-items: center; gap: 14px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.25), 0 4px 10px rgba(15, 23, 42, 0.15); z-index: 100; }
+    .undo-toast button { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.18); padding: 5px 12px; font-size: 12px; font-weight: 500; box-shadow: none; }
+    .undo-toast button:hover { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.3); }
+
+    .card-row { display: grid; grid-template-columns: 32px 56px 1fr auto; gap: 14px; align-items: center; padding: 16px 18px; }
+    .rank { font-size: 13px; font-weight: 600; color: var(--hint); text-align: right; font-variant-numeric: tabular-nums; }
+    .photo {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: linear-gradient(135deg, #eef2ff 0%, #ede9fe 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600; font-size: 16px;
+      color: var(--accent);
+      border: 1px solid var(--border);
+    }
+    img.photo { object-fit: cover; }
+    .who { min-width: 0; }
+    .who .name { font-size: 15px; font-weight: 700; margin: 0; color: var(--text); }
+    .who .meta { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+    .badges { display: flex; gap: 4px; flex-wrap: wrap; }
+    .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; line-height: 1.5; }
+    .b-success { background: var(--success-bg); color: var(--success); }
+    .b-danger { background: var(--danger-bg); color: var(--danger); }
+    .b-warn { background: var(--warn-bg); color: var(--warn); }
+    .b-info { background: var(--info-bg); color: var(--info); }
+    .b-pink { background: var(--pink-bg); color: var(--pink); }
+    .b-purple { background: var(--purple-bg); color: var(--purple); }
+    .b-celebrate {
+      background: linear-gradient(135deg, #fef3c7 0%, #fce7f3 100%);
+      color: #9a3412;
+      font-weight: 700;
+      border: 1px solid #fcd34d;
+      box-shadow: 0 1px 2px rgba(217, 119, 6, 0.15);
+    }
+
+    .stats { text-align: right; min-width: 110px; }
+    .stats .vol { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; color: var(--text); }
+    .stats .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .controls { display: flex; gap: 8px; padding: 0 18px 14px 110px; flex-wrap: wrap; align-items: center; }
+    .controls .contact { display: flex; gap: 6px; font-size: 12px; }
+    .controls .contact a { color: var(--accent); text-decoration: none; padding: 5px 10px; border-radius: 6px; background: var(--accent-bg); font-weight: 500; transition: background 0.12s; }
+    .controls .contact a:hover { background: var(--accent-soft); }
+    .controls .spacer { flex: 1; }
+    .controls .toggle.on { background: var(--success-bg); color: var(--success); border-color: #a7f3d0; box-shadow: none; }
+    .controls .not-in-fub { font-size: 11px; color: var(--warn); }
+    .expand-btn { font-size: 12px; color: var(--accent); background: transparent; border: none; padding: 5px 10px; cursor: pointer; font-weight: 500; box-shadow: none; }
+    .expand-btn:hover { background: var(--accent-bg); border-radius: 6px; box-shadow: none; }
+
+    .profile { display: none; padding: 16px 18px 18px 110px; border-top: 1px solid var(--border); background: #fafbfc; }
+    .card.expanded .profile { display: block; }
+    .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; margin-bottom: 14px; }
+    .profile-section { font-size: 13px; }
+    .profile-section h4 { margin: 0 0 6px; font-size: 11px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 0.06em; }
+    .profile-section .row { display: flex; justify-content: space-between; padding: 3px 0; }
+    .profile-section .row .k { color: var(--muted); }
+    .profile-section .row .v { font-variant-numeric: tabular-nums; }
+    .trend-up { color: var(--success); }
+    .trend-down { color: var(--danger); }
+    .trend-flat { color: var(--muted); }
+
+    .links { display: flex; gap: 8px; margin: 10px 0 14px; flex-wrap: wrap; }
+    .links a { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: 8px; background: var(--accent-bg); color: var(--accent); text-decoration: none; font-size: 13px; font-weight: 500; border: 1px solid transparent; transition: all 0.12s; }
+    .links a:hover { background: var(--accent-soft); border-color: var(--accent-soft); }
+    .links a.disabled { opacity: 0.4; pointer-events: none; }
+
+
+    .notes textarea { width: 100%; min-height: 64px; resize: vertical; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 8px; font: inherit; background: var(--card); transition: border-color 0.12s, box-shadow 0.12s; }
+    .notes textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+    .notes .row { display: flex; justify-content: flex-end; margin-top: 6px; gap: 8px; align-items: center; }
+    .notes .saved { font-size: 11px; color: var(--success); }
+
+    .empty { padding: 40px; text-align: center; color: var(--muted); }
+    .group-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 8px 4px 2px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .group-divider::before, .group-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .group-divider .label {
+      padding: 4px 12px;
+      background: var(--card);
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      color: var(--text);
+    }
+    .group-divider.most .label { color: var(--success); border-color: #a7f3d0; background: var(--success-bg); }
+    .group-divider.least .label { color: var(--warn); border-color: #fde68a; background: var(--warn-bg); }
+    @keyframes cfall {
+      0%   { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
+      100% { transform: translate3d(var(--drift, 0), 110vh, 0) rotate(720deg); opacity: 0.9; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div>
+        <h1>Today's top {{ top_n }} calls</h1>
+        <p class="sub" id="sub">Loading...</p>
+      </div>
+      <div class="actions">
+        <button id="btn-refresh">Refresh data</button>
+        <button id="btn-push-photos" title="Push Courted photo URLs into the FUB Photo URL custom field on each matched contact.">Push photos to FUB</button>
+        <button id="btn-show-all">Show all</button>
+      </div>
+    </div>
+
+    <div class="filters">
+      <label>Brokerage tag:</label>
+      <label class="filter-chip" data-tag="green valley"><input type="checkbox" /> Green Valley</label>
+      <label class="filter-chip" data-tag="signature real estate group"><input type="checkbox" /> Signature Real Estate Group</label>
+      <label class="filter-chip" data-tag="southwest"><input type="checkbox" /> Southwest</label>
+      <label class="filter-chip" data-tag="northwest"><input type="checkbox" /> Northwest</label>
+      <label class="filter-chip" data-tag="utah"><input type="checkbox" /> Utah</label>
+      <button class="filter-clear" id="filter-clear">Clear</button>
+      <div class="filter-spacer"></div>
+      <span class="filter-stats" id="filter-stats"></span>
+    </div>
+
+    <div class="filters bucket-bar">
+      <label>View:</label>
+      <button class="bucket-tab active" data-bucket="">Top ten</button>
+      <button class="bucket-tab" data-bucket="coops">Coops <span class="bucket-count" id="bcount-coops">0</span></button>
+      <button class="bucket-tab" data-bucket="birthday">🎂 Birthday <span class="bucket-count" id="bcount-birthday">0</span></button>
+      <button class="bucket-tab" data-bucket="anniversary">🎉 Anniversary <span class="bucket-count" id="bcount-anniversary">0</span></button>
+      <button class="bucket-tab" data-bucket="nurture">Nurture <span class="bucket-count" id="bcount-nurture">0</span></button>
+      <button class="bucket-tab" data-bucket="warm">Warm <span class="bucket-count" id="bcount-warm">0</span></button>
+      <button class="bucket-tab" data-bucket="hot">Hot <span class="bucket-count" id="bcount-hot">0</span></button>
+    </div>
+
+    {% if dry_run %}
+    <div class="banner dry">Dry-run mode is on. Nothing will be written to Follow Up Boss. Set <code>"dry_run": false</code> in config.json once you're confident the data looks right.</div>
+    {% endif %}
+
+    <div id="errors"></div>
+
+    <div class="progress sticky-progress">
+      <div class="prog-main">
+        <div class="count" id="prog-count">0 of {{ top_n }} called</div>
+        <div class="bar"><div id="prog-bar" style="width:0%"></div></div>
+      </div>
+      <div class="affirmation" id="affirmation"></div>
+    </div>
+
+    <div class="list" id="list">
+      <div class="empty">Loading agents...</div>
+    </div>
+  </div>
+
+<script>
+const TOP_N = {{ top_n }};
+let SHOW_ALL = false;
+let ALL_AGENTS = [];
+let LAST_SYNC = null;
+let CURRENT_BUCKET = ""; // "" = main call list, or "warm"|"nurture"|"hot"
+let BUCKET_COUNTS = { warm: 0, nurture: 0, hot: 0 };
+let SPECIAL_COUNTS = { coops: 0, birthday: 0, anniversary: 0 };
+let EXPANDED = new Set(JSON.parse(localStorage.getItem("expanded_cards") || "[]"));
+
+const TAG_GROUPS = {
+  brokerage: ["green valley", "signature real estate group", "southwest", "northwest", "utah"],
+};
+let FILTER_TAGS = new Set(JSON.parse(localStorage.getItem("flt_tags") || "[]"));
+
+function fmtMoney(n) {
+  if (!n) return "$0";
+  if (n >= 1_000_000) return "$" + (n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1).replace(/\.0$/, "") + "M";
+  if (n >= 1_000) return "$" + Math.round(n / 1_000) + "k";
+  return "$" + n;
+}
+function fmtPct(cur, prev) {
+  if (!prev || prev <= 0) return null;
+  return (cur - prev) / prev * 100;
+}
+function fmtTrend(cur, prev, formatter) {
+  formatter = formatter || fmtMoney;
+  const pct = fmtPct(cur, prev);
+  if (pct === null) return `<span class="v">${formatter(cur)}</span>`;
+  const sign = pct >= 0 ? "↑" : "↓";
+  const cls = pct > 1 ? "trend-up" : pct < -1 ? "trend-down" : "trend-flat";
+  return `<span class="v">${formatter(cur)} <span class="${cls}">${sign}${Math.abs(pct).toFixed(0)}%</span> <span class="k" style="font-size:11px">(was ${formatter(prev)})</span></span>`;
+}
+function escapeHtml(s) { return (s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c]); }
+function initials(a) {
+  const f = (a.first_name || "").trim();
+  const l = (a.last_name || "").trim();
+  const i1 = f ? f[0] : "";
+  const i2 = l ? l[0] : "";
+  return (i1 + i2).toUpperCase() || (a.email ? a.email[0].toUpperCase() : "?");
+}
+function displayName(a) {
+  const full = `${(a.first_name || "").trim()} ${(a.last_name || "").trim()}`.trim();
+  return full || a.email || `Agent #${a.rank}`;
+}
+function fmtDate(s) {
+  if (!s) return "—";
+  // Match YYYY-MM-DD, MM-DD-YYYY, MM/DD/YYYY, or MM-DD
+  let yr, mo, dy;
+  let m = String(s).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) { yr = m[1]; mo = m[2]; dy = m[3]; }
+  else {
+    m = String(s).match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (m) { mo = m[1]; dy = m[2]; yr = m[3]; }
+    else {
+      m = String(s).match(/^(\d{1,2})[-/](\d{1,2})/);
+      if (m) { mo = m[1]; dy = m[2]; }
+    }
+  }
+  if (!mo || !dy) return s;
+  const months = ["", "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const ystr = yr ? `, ${yr}` : "";
+  return `${months[parseInt(mo, 10)] || mo} ${parseInt(dy, 10)}${ystr}`;
+}
+
+function fmtAnniversary(s) {
+  if (!s) return "—";
+  const base = fmtDate(s);
+  // Try to compute years elapsed
+  let yr;
+  let m = String(s).match(/^(\d{4})/);
+  if (m) yr = parseInt(m[1], 10);
+  else {
+    m = String(s).match(/[-/](\d{4})$/);
+    if (m) yr = parseInt(m[1], 10);
+  }
+  if (yr) {
+    const now = new Date();
+    const elapsed = now.getFullYear() - yr;
+    if (elapsed >= 0 && elapsed < 60) {
+      return `${base} (${elapsed} yr${elapsed === 1 ? '' : 's'})`;
+    }
+  }
+  return base;
+}
+
+function badgesFor(a) {
+  const out = [];
+  if (a.birthday_today) out.push(["🎂 Birthday today", "b-celebrate"]);
+  if (a.anniversary_today) out.push(["🎉 Anniversary today", "b-celebrate"]);
+  if (a.top_15_percent) out.push(["Top 15%", "b-purple"]);
+  if (a.ready_to_move) out.push(["Ready to move", "b-success"]);
+  if (a.trouble_at_office) out.push(["Trouble at office", "b-danger"]);
+  if (a.decreasing_sales) out.push(["Decreasing sales", "b-warn"]);
+  if (a.fresh_talent) out.push(["Fresh talent", "b-info"]);
+  if (a.predicted_growth) out.push(["Predicted growth", "b-pink"]);
+  return out;
+}
+
+function agentTagsLower(a) {
+  return (a.tags || []).map(t => String(t).toLowerCase());
+}
+function applyFilters(agents) {
+  // The Coops tab is meant to show everyone on FUB Smart List 21 with no further filtering.
+  if (CURRENT_BUCKET === "coops") return agents.slice();
+  // Brokerage-tag group: if any chip is selected, agent must match at least one.
+  // Matching is permissive: checks FUB tags, office name, AND brand name — so the chip works
+  // for agents pulled from Courted (no FUB tags) as well as FUB-tagged contacts.
+  const selected = (TAG_GROUPS.brokerage || []).filter(t => FILTER_TAGS.has(t));
+  if (!selected.length) return agents.slice();
+  return agents.filter(a => {
+    const tagsLc = agentTagsLower(a);
+    const office = (a.office || "").toLowerCase();
+    return selected.some(s => {
+      if (tagsLc.some(t => t.includes(s))) return true;
+      if (office.includes(s)) return true;
+      return false;
+    });
+  });
+}
+
+function renderHeader() {
+  const sub = document.getElementById("sub");
+  const today = new Date();
+  const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  let lastSyncStr = "never";
+  if (LAST_SYNC) lastSyncStr = new Date(LAST_SYNC).toLocaleString();
+  sub.textContent = `${days[today.getDay()]}, ${months[today.getMonth()]} ${today.getDate()}, ${today.getFullYear()} · last sync ${lastSyncStr}`;
+}
+
+function profileHtml(a) {
+  const officeRank = a.office_rank ? `#${a.office_rank}${a.office_roster_count ? ' of ' + a.office_roster_count : ''}` : "—";
+  // Courted returns tenure values in MONTHS — convert to years for display
+  const fmtMonths = m => {
+    if (!m) return "—";
+    if (m < 12) return `${Math.round(m * 10) / 10} mo`;
+    const yrs = m / 12;
+    return `${yrs.toFixed(1)} yrs`;
+  };
+  const tenure = fmtMonths(a.agent_tenure);
+  const atOffice = fmtMonths(a.time_at_current_office);
+  const predicted = a.sales_volume_prediction
+    ? fmtTrend(a.sales_volume_prediction, a.ltm_sales_volume)
+    : `<span class="v">—</span>`;
+
+  const fubLink = a.in_fub
+    ? `<a href="${escapeHtml(a.fub_url)}" onclick="return openSingleTab('fub', this.href)">Open in FUB ↗</a>`
+    : `<a class="disabled">Not in FUB</a>`;
+  const courtedLink = a.courted_id
+    ? `<a href="${escapeHtml(a.courted_url)}" onclick="return openSingleTab('courted', this.href)">Open in Courted ↗</a>`
+    : "";
+
+  return `
+    <div class="profile-grid">
+      <div class="profile-section">
+        <h4>Important dates</h4>
+        <div class="row"><span class="k">Birthday</span><span class="v">${a.birthday ? fmtDate(a.birthday) : 'NA'}</span></div>
+        <div class="row"><span class="k">Anniversary</span><span class="v">${a.anniversary ? fmtAnniversary(a.anniversary) : 'NA'}</span></div>
+      </div>
+      <div class="profile-section">
+        <h4>Career</h4>
+        <div class="row"><span class="k">Total tenure</span><span class="v">${tenure}</span></div>
+        <div class="row"><span class="k">At current office</span><span class="v">${atOffice}</span></div>
+        <div class="row"><span class="k">Office rank</span><span class="v">${officeRank}</span></div>
+      </div>
+      <div class="profile-section">
+        <h4>Year-over-year trends</h4>
+        <div class="row"><span class="k">Volume</span>${fmtTrend(a.ltm_sales_volume, a.prev_ltm_sales_volume)}</div>
+        <div class="row"><span class="k">Closed units</span>${fmtTrend(a.ltm_closed_units, a.prev_ltm_closed_units, n => String(n))}</div>
+        <div class="row"><span class="k">Avg sale price</span>${fmtTrend(a.ltm_avg_sale_price, a.prev_ltm_avg_sale_price)}</div>
+      </div>
+      <div class="profile-section">
+        <h4>Units breakdown (last 12 mo)</h4>
+        <div class="row"><span class="k">Listing side</span><span class="v">${a.ltm_closed_units_list}</span></div>
+        <div class="row"><span class="k">Buy side</span><span class="v">${a.ltm_closed_units_buy}</span></div>
+        <div class="row"><span class="k">Active / pending</span><span class="v">${a.active_listings} / ${a.pending_listings}</span></div>
+        <div class="row"><span class="k">Est. GCI</span><span class="v">${fmtMoney(a.ltm_est_gci)}</span></div>
+      </div>
+      <div class="profile-section" style="grid-column: 1 / -1;">
+        <h4>Forecast</h4>
+        <div class="row"><span class="k">Predicted next 12 mo</span>${predicted}</div>
+      </div>
+    </div>
+
+    <div class="links">
+      ${fubLink}
+      ${courtedLink}
+    </div>
+
+    <div class="notes">
+      <textarea placeholder="Notes for this call... (saves to FUB on click of Save note)"></textarea>
+      <div class="row">
+        <span class="saved" style="display:none">Note saved to FUB</span>
+        <button data-action="save-note">Save note</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderList() {
+  const filtered = applyFilters(ALL_AGENTS);
+  const agents = SHOW_ALL ? filtered : filtered.slice(0, TOP_N);
+
+  const stats = document.getElementById("filter-stats");
+  stats.textContent = filtered.length !== ALL_AGENTS.length
+    ? `${filtered.length} of ${ALL_AGENTS.length} match`
+    : `${ALL_AGENTS.length} total`;
+
+  const list = document.getElementById("list");
+  if (!agents.length) {
+    const hasFilters = FILTER_TAGS && FILTER_TAGS.size > 0;
+    const totalAvailable = ALL_AGENTS.length;
+    if (hasFilters && totalAvailable > 0) {
+      list.innerHTML = `<div class="empty">
+        <p style="margin:0 0 12px">No agents in the call list match your brokerage-tag filter.</p>
+        <p style="margin:0;font-size:12px">${totalAvailable} agent(s) are loaded — they just don't have a matching tag or office name.</p>
+        <button id="empty-clear-filters" style="margin-top:14px;background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600">Clear filters</button>
+      </div>`;
+      document.getElementById("empty-clear-filters").addEventListener("click", () => {
+        FILTER_TAGS.clear();
+        syncChipUI();
+        persistFilters();
+        renderList();
+      });
+    } else {
+      list.innerHTML = '<div class="empty">No agents match the current filters.</div>';
+    }
+    animateProgress(LAST_CALLED_COUNT, 0, TOP_N);
+    LAST_CALLED_COUNT = 0;
+    renderAffirmation(0, 0);
+    return;
+  }
+
+  let calledCount = 0;
+  list.innerHTML = "";
+  let renderErrors = 0;
+  let lastGroup = null;
+  agents.forEach((a, i) => {
+    try {
+    // Insert a divider when the group label changes (Top ten tab: "most" → "least")
+    const g = a.group || "";
+    if (g && g !== lastGroup) {
+      const div = document.createElement("div");
+      div.className = "group-divider " + g;
+      const label = g === "most" ? "Top 5 producers — most transactions" : "Bottom 5 — least transactions";
+      div.innerHTML = `<span class="label">${label}</span>`;
+      list.appendChild(div);
+      lastGroup = g;
+    }
+    if (a.called) calledCount++;
+    const card = document.createElement("div");
+    const isExpanded = EXPANDED.has(a.courted_id);
+    card.className = "card" + (a.called ? " called" : "") + (a.skipped ? " skipped" : "") + (isExpanded ? " expanded" : "");
+    card.dataset.id = a.courted_id;
+
+    const photoHtml = a.photo
+      ? `<img class="photo" src="${escapeHtml(a.photo)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'photo',textContent:'${initials(a)}'}))" />`
+      : `<div class="photo">${initials(a)}</div>`;
+
+    const badgeChips = badgesFor(a).map(([l, c]) => `<span class="badge ${c}">${l}</span>`).join("");
+
+    const phone = a.phone || "";
+    const email = a.email || "";
+    // Use FUB's click-to-call: open the person's FUB page in a new tab, where FUB's
+    // built-in Call button uses their integrated dialer + auto-logs the call.
+    // Falls back to a plain tel: link if the agent isn't in FUB.
+    // Phone link uses tel: protocol — opens your default dialer (phone app on mobile,
+    // FaceTime/Skype/etc. on desktop). The call is then auto-logged to FUB via API when
+    // you click "Mark called" — no FUB browser login required.
+    const phoneHref = phone
+      ? `<a href="tel:${escapeHtml(phone)}" title="Dial via your phone's default app. Click 'Mark called' after the call to auto-log it to FUB.">📞 Call ${escapeHtml(phone)}</a>`
+      : "";
+    const emailHref = email ? `<a href="mailto:${escapeHtml(email)}">Email</a>` : "";
+    const notInFub = a.in_fub ? "" : `<span class="not-in-fub">Not in FUB</span>`;
+
+    card.innerHTML = `
+      <div class="card-row">
+        <div class="rank">${i + 1}</div>
+        ${photoHtml}
+        <div class="who">
+          <p class="name">${escapeHtml(displayName(a))}${a.bucket ? `<span class="bucket-badge ${a.bucket}">${a.bucket}</span>` : ""}${a.skipped ? `<span class="skipped-badge">Skipped today</span>` : ""}</p>
+          <p class="meta">${escapeHtml(a.office)}${a.city ? " · " + escapeHtml(a.city) : ""}</p>
+          <div class="badges">${badgeChips}</div>
+        </div>
+        <div class="stats">
+          <div class="vol">${fmtMoney(a.ltm_sales_volume)}</div>
+          <div class="sub">${a.ltm_closed_units} deals · ${a.active_listings + a.pending_listings} active/pending</div>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="contact">${phoneHref}${emailHref}</div>
+        ${notInFub}
+        <button class="expand-btn" data-action="toggle-profile">${isExpanded ? '▴ Hide profile' : '▾ View profile'}</button>
+        <div class="spacer"></div>
+        <div class="bucket-btns" title="Move to bucket — they leave the call list and show up under that tab.">
+          <button class="bucket-btn-warm ${a.bucket === 'warm' ? 'on' : ''}" data-action="bucket" data-bucket="warm">Warm</button>
+          <button class="bucket-btn-nurture ${a.bucket === 'nurture' ? 'on' : ''}" data-action="bucket" data-bucket="nurture">Nurture</button>
+          <button class="bucket-btn-hot ${a.bucket === 'hot' ? 'on' : ''}" data-action="bucket" data-bucket="hot">Hot</button>
+        </div>
+        <button class="skip-btn ${a.skipped ? 'on' : ''}" data-action="skip" title="${a.skipped ? 'Bring this agent back to their natural rank.' : 'Push to bottom of the list. Resurfaces after the rest. Resets tomorrow.'}">${a.skipped ? 'Skipped ✓' : 'Skip'}</button>
+        <button class="toggle ${a.called ? 'on' : ''}" data-action="called">${a.called ? 'Called ✓' : 'Mark called'}</button>
+      </div>
+      <div class="profile">${profileHtml(a)}</div>
+    `;
+    list.appendChild(card);
+    } catch (err) {
+      renderErrors++;
+      console.error("[renderList] error rendering agent index", i, ":", err, a);
+    }
+  });
+  if (renderErrors) console.warn(`[renderList] ${renderErrors} of ${agents.length} agents failed to render — see errors above.`);
+
+  const denom = Math.min(TOP_N, agents.length) || 1;
+  animateProgress(LAST_CALLED_COUNT, calledCount, denom);
+  LAST_CALLED_COUNT = calledCount;
+  renderAffirmation(calledCount, denom);
+}
+
+let LAST_CALLED_COUNT = 0;
+function animateProgress(from, to, denom) {
+  const countEl = document.getElementById("prog-count");
+  const barEl = document.getElementById("prog-bar");
+  if (!countEl || !barEl) return;
+  // Bar already has a CSS width transition — just set its target value.
+  barEl.style.width = (Math.round((to / denom) * 100) || 0) + "%";
+  // Count: animate from previous value up (or down) to new value with ease-out.
+  if (from === to) {
+    countEl.textContent = `${to} of ${denom} called`;
+    return;
+  }
+  const duration = 500;
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 2);
+    const current = Math.round(from + (to - from) * eased);
+    countEl.textContent = `${current} of ${denom} called`;
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+let CONFETTI_FIRED = false;
+function fireConfetti() {
+  const colors = ["#4f46e5", "#7c3aed", "#06b6d4", "#10b981", "#22d3ee", "#f59e0b", "#f43f5e", "#ec4899", "#84cc16"];
+  // Try the canvas-confetti CDN library first
+  if (typeof confetti === "function") {
+    const duration = 4000;
+    const end = Date.now() + duration;
+    // Two side cannons fire continuously for 4 seconds
+    (function frame() {
+      confetti({ particleCount: 8, angle: 60, spread: 75, origin: { x: 0, y: 0.75 }, colors, startVelocity: 55, scalar: 1.1 });
+      confetti({ particleCount: 8, angle: 120, spread: 75, origin: { x: 1, y: 0.75 }, colors, startVelocity: 55, scalar: 1.1 });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    })();
+    // Three staggered center bursts
+    confetti({ particleCount: 250, spread: 110, origin: { x: 0.5, y: 0.55 }, colors, scalar: 1.25, startVelocity: 60 });
+    setTimeout(() => confetti({ particleCount: 200, spread: 130, origin: { x: 0.25, y: 0.5 }, colors, scalar: 1.15, startVelocity: 50 }), 350);
+    setTimeout(() => confetti({ particleCount: 200, spread: 130, origin: { x: 0.75, y: 0.5 }, colors, scalar: 1.15, startVelocity: 50 }), 700);
+    // Final rain from the top
+    setTimeout(() => {
+      const rainEnd = Date.now() + 1500;
+      (function rain() {
+        confetti({ particleCount: 6, angle: 90, spread: 180, origin: { x: Math.random(), y: -0.1 }, colors, startVelocity: 30, gravity: 0.7, scalar: 1.0 });
+        if (Date.now() < rainEnd) requestAnimationFrame(rain);
+      })();
+    }, 900);
+    return;
+  }
+  // Fallback: pure-JS confetti — spawns divs that fall and rotate
+  fallbackConfetti(colors);
+}
+
+function fallbackConfetti(colors) {
+  const container = document.createElement("div");
+  container.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden;";
+  document.body.appendChild(container);
+  const N = 400;
+  const shapes = ["square", "rect", "circle"];
+  for (let i = 0; i < N; i++) {
+    const piece = document.createElement("div");
+    const size = 6 + Math.random() * 10;
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const left = Math.random() * 100;
+    const delay = Math.random() * 1.2;
+    const dur = 2.2 + Math.random() * 2.2;
+    const rot = (Math.random() * 1080 - 540) | 0;
+    const drift = (Math.random() * 300 - 150) | 0;
+    const shape = shapes[Math.floor(Math.random() * shapes.length)];
+    const w = size;
+    const h = shape === "rect" ? size * 0.4 : size;
+    const radius = shape === "circle" ? "50%" : "2px";
+    piece.style.cssText = `position:absolute;top:-20px;left:${left}vw;width:${w}px;height:${h}px;background:${color};border-radius:${radius};opacity:0.95;transform:rotate(${rot}deg);animation:cfall ${dur}s ${delay}s cubic-bezier(0.25,0.45,0.6,1) forwards;--drift:${drift}px;`;
+    container.appendChild(piece);
+  }
+  setTimeout(() => container.remove(), 5000);
+}
+
+function renderAffirmation(called, denom) {
+  const el = document.getElementById("affirmation");
+  if (!el) return;
+  el.className = "affirmation";
+  if (denom <= 0) { el.textContent = ""; return; }
+  const pct = called / denom;
+  // Reset the confetti flag whenever we're not at 100%, so unmarking and re-finishing fires it again.
+  if (called < denom) CONFETTI_FIRED = false;
+  if (called >= denom) {
+    el.textContent = "Good job! You completed your task today.";
+    el.classList.add("celebrate");
+    if (!CONFETTI_FIRED) { CONFETTI_FIRED = true; fireConfetti(); }
+  } else if (pct >= 0.9) {
+    el.textContent = "Just one more — you've got this!";
+    el.classList.add("encourage");
+  } else if (pct >= 0.75) {
+    el.textContent = "Almost there — final stretch!";
+    el.classList.add("encourage");
+  } else if (pct >= 0.5) {
+    el.textContent = "You're halfway done!";
+    el.classList.add("encourage");
+  } else if (pct >= 0.25) {
+    el.textContent = "Nice start — keep the momentum.";
+    el.classList.add("encourage");
+  } else if (called === 0) {
+    el.textContent = "Anyone you don't reach today will come back tomorrow — give it your best shot.";
+    el.classList.add("hint");
+  } else {
+    el.textContent = "";
+  }
+}
+
+function persistFilters() {
+  localStorage.setItem("flt_tags", JSON.stringify(Array.from(FILTER_TAGS)));
+}
+function syncChipUI() {
+  document.querySelectorAll(".filter-chip[data-tag]").forEach(chip => {
+    const t = chip.getAttribute("data-tag");
+    const active = FILTER_TAGS.has(t);
+    chip.classList.toggle("active", active);
+    const cb = chip.querySelector("input");
+    if (cb) cb.checked = active;
+  });
+}
+function persistExpanded() { localStorage.setItem("expanded_cards", JSON.stringify(Array.from(EXPANDED))); }
+
+async function load() {
+  const url = "/api/agents?all=1" + (CURRENT_BUCKET ? "&bucket=" + encodeURIComponent(CURRENT_BUCKET) : "");
+  const r = await fetch(url);
+  const data = await r.json();
+  ALL_AGENTS = data.agents || [];
+  LAST_SYNC = data.last_sync;
+  BUCKET_COUNTS = data.buckets_counts || { warm: 0, nurture: 0, hot: 0 };
+  SPECIAL_COUNTS = data.special_counts || { coops: 0, birthday: 0, anniversary: 0 };
+  renderBucketBar();
+
+  const errEl = document.getElementById("errors");
+  errEl.innerHTML = "";
+  if (data.errors && data.errors.length) {
+    const div = document.createElement("div");
+    div.className = "banner error";
+    div.textContent = data.errors.join("\n");
+    errEl.appendChild(div);
+  }
+  renderHeader();
+  renderList();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Tag filter chips
+  document.querySelectorAll(".filter-chip[data-tag]").forEach(chip => {
+    const tag = chip.getAttribute("data-tag");
+    chip.addEventListener("click", e => {
+      // Stop the click bubbling from triggering twice (once on label, once on input)
+      if (e.target.tagName === "INPUT") e.stopPropagation();
+      if (FILTER_TAGS.has(tag)) FILTER_TAGS.delete(tag);
+      else FILTER_TAGS.add(tag);
+      syncChipUI(); persistFilters(); renderList();
+    });
+  });
+  syncChipUI();
+  document.getElementById("filter-clear").addEventListener("click", () => {
+    FILTER_TAGS.clear();
+    syncChipUI(); persistFilters(); renderList();
+  });
+});
+
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+
+  if (btn.id === "btn-refresh") {
+    btn.disabled = true; btn.textContent = "Refreshing...";
+    try { await fetch("/api/refresh", { method: "POST" }); await load(); }
+    finally { btn.disabled = false; btn.textContent = "Refresh data"; }
+    return;
+  }
+
+  if (btn.id === "btn-push-photos") {
+    if (!confirm("Push Courted photo URLs into the FUB Photo URL custom field for all matched contacts?")) return;
+    btn.disabled = true; btn.textContent = "Pushing...";
+    try {
+      const r = await fetch("/api/push-photos", { method: "POST" });
+      const d = await r.json();
+      alert(d.dry_run ? "Dry-run on; no writes made." : (d.ok ? `Updated ${d.updated} contacts.` : "Error: " + d.error));
+    } finally { btn.disabled = false; btn.textContent = "Push photos to FUB"; }
+    return;
+  }
+
+  if (btn.id === "btn-show-all") {
+    SHOW_ALL = !SHOW_ALL;
+    btn.textContent = SHOW_ALL ? "Show top " + TOP_N : "Show all";
+    renderList();
+    return;
+  }
+
+  if (btn.classList.contains("bucket-tab")) {
+    CURRENT_BUCKET = btn.dataset.bucket || "";
+    await load();
+    return;
+  }
+
+  const card = btn.closest(".card");
+  if (!card) return;
+  const id = card.dataset.id;
+  const action = btn.dataset.action;
+
+  if (action === "toggle-profile") {
+    if (EXPANDED.has(id)) { EXPANDED.delete(id); card.classList.remove("expanded"); btn.textContent = "▾ View profile"; }
+    else { EXPANDED.add(id); card.classList.add("expanded"); btn.textContent = "▴ Hide profile"; }
+    persistExpanded();
+    return;
+  }
+
+  if (action === "bucket") {
+    const target = btn.dataset.bucket; // 'warm' | 'nurture' | 'hot'
+    const a = ALL_AGENTS.find(x => x.courted_id === id);
+    const displayLabel = a ? displayName(a) : "Agent";
+    const currentBucket = a ? a.bucket : "";
+    // If button is already 'on' (this agent is already in this bucket), clicking removes them.
+    const newBucket = currentBucket === target ? "" : target;
+    btn.disabled = true;
+    try {
+      const r = await fetch("/api/bucket/" + encodeURIComponent(id), {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ bucket: newBucket }),
+      });
+      const d = await r.json();
+      if (!d.ok) { alert("Couldn't move: " + (d.error || "")); btn.disabled = false; return; }
+      BUCKET_COUNTS = d.counts || BUCKET_COUNTS;
+      renderBucketBar();
+      // If we just MOVED into a bucket and we're viewing the call list, remove from local view.
+      // If we just REMOVED from a bucket and we're viewing that bucket, remove from local view.
+      const shouldRemove =
+        (newBucket && CURRENT_BUCKET === "") ||
+        (!newBucket && CURRENT_BUCKET) ||
+        (newBucket && CURRENT_BUCKET && newBucket !== CURRENT_BUCKET);
+      if (shouldRemove) {
+        ALL_AGENTS = ALL_AGENTS.filter(x => x.courted_id !== id);
+      } else if (a) {
+        a.bucket = newBucket;
+      }
+      renderList();
+      if (newBucket) {
+        showBucketToast(id, displayLabel, newBucket);
+      }
+    } catch (err) {
+      btn.disabled = false;
+      alert("Couldn't move: " + err);
+    }
+    return;
+  }
+
+  if (action === "skip") {
+    btn.disabled = true;
+    const a = ALL_AGENTS.find(x => x.courted_id === id);
+    const displayLabel = a ? displayName(a) : "Agent";
+    const wasSkipped = !!(a && a.skipped);
+    try {
+      await fetch("/api/skip/" + encodeURIComponent(id), {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ skip: !wasSkipped }),
+      });
+      // Re-fetch so the new ordering (skipped agents pushed to the end) is correct
+      await load();
+      if (!wasSkipped) showUndoToast(id, displayLabel);
+    } catch (err) {
+      btn.disabled = false;
+      alert("Couldn't skip: " + err);
+    }
+    return;
+  }
+
+  if (action === "called") {
+    const isOn = btn.classList.contains("on");
+    btn.disabled = true;
+    // When marking as called (not un-marking), also log a call event to FUB and ask for a quick outcome.
+    let outcome = null, note = "";
+    if (!isOn) {
+      outcome = prompt("Call outcome? (Reached / Left Message / No Answer / Bad Number / Busy)\n— or hit Cancel to just tag without logging the call to FUB", "Reached");
+      if (outcome) {
+        const ta = card.querySelector("textarea");
+        note = (ta && ta.value) ? ta.value.trim() : "";
+      }
+    }
+    try {
+      const r = await fetch("/api/called/" + encodeURIComponent(id), {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ called: !isOn }),
+      });
+      const d = await r.json();
+      if (!d.ok) { alert("Couldn't mark called: " + (d.error || "")); }
+      // Log the call to FUB so it appears on the contact's activity timeline.
+      if (!isOn && outcome) {
+        try {
+          const lr = await fetch("/api/log-call/" + encodeURIComponent(id), {
+            method: "POST", headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({ outcome, duration_seconds: 300, note }),
+          });
+          const ld = await lr.json();
+          if (!ld.ok && !ld.dry_run) console.warn("FUB call-log failed:", ld.error);
+        } catch (err) { console.warn("FUB call-log error:", err); }
+      }
+      const a = ALL_AGENTS.find(x => x.courted_id === id);
+      if (a) a.called = !isOn;
+      renderList();
+    } finally { btn.disabled = false; }
+    return;
+  }
+
+  if (action === "save-note") {
+    const ta = card.querySelector("textarea");
+    const note = ta.value;
+    if (!note.trim()) return;
+    btn.disabled = true; btn.textContent = "Saving...";
+    try {
+      const r = await fetch("/api/note/" + encodeURIComponent(id), {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ note }),
+      });
+      const d = await r.json();
+      const saved = card.querySelector(".saved");
+      if (d.ok) {
+        saved.textContent = d.dry_run ? "Dry-run; not saved" : "Note saved to FUB";
+        saved.style.display = "inline";
+        setTimeout(() => saved.style.display = "none", 3000);
+        ta.value = "";
+      } else {
+        alert("Couldn't save note: " + (d.error || ""));
+      }
+    } finally { btn.disabled = false; btn.textContent = "Save note"; }
+    return;
+  }
+});
+
+function renderBucketBar() {
+  document.getElementById("bcount-warm").textContent = BUCKET_COUNTS.warm || 0;
+  document.getElementById("bcount-nurture").textContent = BUCKET_COUNTS.nurture || 0;
+  document.getElementById("bcount-hot").textContent = BUCKET_COUNTS.hot || 0;
+  document.getElementById("bcount-coops").textContent = SPECIAL_COUNTS.coops || 0;
+  document.getElementById("bcount-birthday").textContent = SPECIAL_COUNTS.birthday || 0;
+  document.getElementById("bcount-anniversary").textContent = SPECIAL_COUNTS.anniversary || 0;
+  document.querySelectorAll(".bucket-tab").forEach(b => {
+    b.classList.toggle("active", (b.dataset.bucket || "") === CURRENT_BUCKET);
+  });
+}
+
+let TOAST_TIMER = null;
+function showBucketToast(id, name, bucket) {
+  const existing = document.getElementById("undo-toast");
+  if (existing) existing.remove();
+  if (TOAST_TIMER) { clearTimeout(TOAST_TIMER); TOAST_TIMER = null; }
+  const toast = document.createElement("div");
+  toast.id = "undo-toast";
+  toast.className = "undo-toast";
+  toast.innerHTML = `<span>Moved ${escapeHtml(name)} to <strong>${escapeHtml(bucket)}</strong></span><button id="undo-bucket-btn">Undo</button>`;
+  document.body.appendChild(toast);
+  document.getElementById("undo-bucket-btn").addEventListener("click", async () => {
+    await fetch("/api/bucket/" + encodeURIComponent(id), {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ bucket: "" }),
+    });
+    toast.remove();
+    await load();
+  });
+  TOAST_TIMER = setTimeout(() => { toast.remove(); TOAST_TIMER = null; }, 6000);
+}
+
+function showUndoToast(id, name) {
+  const existing = document.getElementById("undo-toast");
+  if (existing) existing.remove();
+  if (TOAST_TIMER) { clearTimeout(TOAST_TIMER); TOAST_TIMER = null; }
+  const toast = document.createElement("div");
+  toast.id = "undo-toast";
+  toast.className = "undo-toast";
+  toast.innerHTML = `<span>${escapeHtml(name)} moved to bottom of the list</span><button id="undo-skip-btn">Undo</button>`;
+  document.body.appendChild(toast);
+  document.getElementById("undo-skip-btn").addEventListener("click", async () => {
+    await fetch("/api/skip/" + encodeURIComponent(id), {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ skip: false }),
+    });
+    toast.remove();
+    await load();
+  });
+  TOAST_TIMER = setTimeout(() => { toast.remove(); TOAST_TIMER = null; }, 6000);
+}
+
+// Single-tab manager: keep one persistent window per external service (FUB, Courted).
+// More reliable than HTML target="..." which mobile browsers often ignore.
+const SINGLE_TAB_REFS = { fub: null, courted: null };
+function openSingleTab(key, url) {
+  try {
+    const ref = SINGLE_TAB_REFS[key];
+    if (ref && !ref.closed) {
+      ref.location.href = url;
+      try { ref.focus(); } catch (_) {}
+    } else {
+      SINGLE_TAB_REFS[key] = window.open(url, key + "-window");
+    }
+  } catch (err) {
+    console.warn("openSingleTab error:", err);
+    window.open(url, "_blank");
+  }
+  return false; // prevent the default link navigation
+}
+
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "courted_api_key": "PASTE_COURTED_KEY_HERE",
+  "courted_auth_scheme": "Token",
+  "courted_base_url": "https://api.courted.io/api/v1",
+  "courted_source": "pipeline",
+  "courted_watchlist_id": "",
+  "courted_saved_search_id": "",
+  "fub_api_key": "PASTE_FOLLOWUPBOSS_KEY_HERE",
+  "fub_base_url": "https://api.followupboss.com/v1",
+  "fub_system_name": "AgentCallSheet",
+  "fub_system_key": "agent-call-sheet-local",
+  "fub_stage_filter": "Agents",
+  "fub_custom_fields": {
+    "photo_url": "Photo URL",
+    "courted_id": "Courted ID",
+    "last_called": "Last Called",
+    "priority_score": "Priority Score",
+    "birthday": "Birthday",
+    "anniversary": "customSREGAniversary"
+  },
+  "fub_called_tag_template": "called-{date}",
+  "scoring_weights": {
+    "volume_per_million_capped_at": 100,
+    "ready_to_move": 50,
+    "trouble_at_office": 30,
+    "decreasing_sales": 25,
+    "fresh_talent": 20,
+    "predicted_growth": 15,
+    "per_closed_unit": 0.5,
+    "called_penalty": 1000
+  },
+  "top_n": 10,
+  "dry_run": true,
+  "auto_create_in_fub": false,
+  "server_port": 8765,
+  "fub_web_url": "https://app.followupboss.com/2/people/view/{id}",
+  "courted_web_url": "https://brokerage.courted.io/candidates/agent_{courted_mls_id}"
+}

@@ -1,0 +1,29 @@
+# --- Next.js ---
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# --- Env / secrets ---
+.env
+.env.local
+.env*.local
+
+# --- Prisma / DB ---
+dev.db
+dev.db-journal
+prisma/migrations/
+
+# --- Legacy Python (kept during migration; delete the folder once Next.js is verified) ---
+config.json
+data/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# --- OS ---
+.DS_Store
+Thumbs.db

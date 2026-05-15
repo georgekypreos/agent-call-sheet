@@ -1,0 +1,169 @@
+// Prisma schema for the Agent Call Sheet. Targets SQLite locally and Turso (libSQL) in production.
+// Generate the Prisma Client with: pnpm/npm run db:push (during dev) or `prisma migrate` (production).
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// One row per FUB person. Production fields from Courted are denormalized here so
+// the Top ten / Coops / bucket queries don't need joins to enrichment data.
+model Agent {
+  id                    Int       @id @default(autoincrement())
+  fubId                 Int       @unique
+  courtedId             String?
+  courtedMlsId          String?
+  // Identity
+  firstName             String?
+  lastName              String?
+  email                 String?
+  phone                 String?
+  agentPhoto            String?
+  // Tags from FUB (raw JSON array as a string for SQLite simplicity)
+  tagsJson              String?
+  isSREG                Boolean   @default(false)
+  // Production metrics from Courted (or 0/null if no Courted match)
+  ltmSalesVolume        Float?
+  ltmClosedUnits        Int?
+  ltmClosedUnitsBuy     Int?
+  ltmClosedUnitsList    Int?
+  ltmAvgSalePrice       Float?
+  ltmEstGci             Float?
+  prevLtmSalesVolume    Float?
+  prevLtmClosedUnits    Int?
+  prevLtmAvgSalePrice   Float?
+  salesVolumePrediction Float?
+  activeListings        Int?
+  pendingListings       Int?
+  agentTenure           Float?
+  timeAtCurrentOffice   Float?
+  officeRank            Int?
+  officeRosterCount     Int?
+  currentOfficeName     String?
+  brandName             String?
+  mlsId                 String?
+  memberMlsId           String?
+  // Signal flags from Courted
+  atReadyToMove         Boolean?  @default(false)
+  atTroubleAtOffice     Boolean?  @default(false)
+  atDecreasingSales     Boolean?  @default(false)
+  atFreshTalent         Boolean?  @default(false)
+  // Dates pulled from FUB custom fields (stored as ISO strings to preserve raw value)
+  birthday              String?
+  anniversary           String?
+  // Whether enrichment found a Courted record for this agent
+  hasCourtedData        Boolean   @default(false)
+  courtedFetchedAt      DateTime?
+  // Sync metadata
+  lastSeenAt            DateTime  @default(now())
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  // Relations
+  bucket                Bucket?
+  skips                 SkipDay[]
+  calls                 Call[]
+  notes                 Note[]
+
+  @@index([isSREG])
+  @@index([ltmClosedUnits])
+  @@index([birthday])
+  @@index([anniversary])
+  @@index([currentOfficeName])
+  @@index([email])
+}
+
+// Persistent warm/nurture/hot assignment (one bucket per agent). Survives daily resets.
+model Bucket {
+  id        Int      @id @default(autoincrement())
+  agentId   Int      @unique
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  name      String   // "warm" | "nurture" | "hot"
+  createdAt DateTime @default(now())
+
+  @@index([name])
+}
+
+// Per-day skip — skipped agents sink to the bottom, auto-reset at midnight.
+model SkipDay {
+  id        Int      @id @default(autoincrement())
+  agentId   Int
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  date      String   // YYYY-MM-DD
+  createdAt DateTime @default(now())
+
+  @@unique([agentId, date])
+  @@index([date])
+}
+
+// Each "Mark called" click creates a row. Also POSTed to FUB's /calls endpoint when not dry-run.
+model Call {
+  id          Int      @id @default(autoincrement())
+  agentId     Int
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  outcome     String?  // "Reached" | "Left Message" | "No Answer" | "Bad Number" | "Busy"
+  durationSec Int      @default(300)
+  note        String?
+  fubCallId   String?  // ID returned by FUB after successful sync
+  syncStatus  String   @default("pending") // "pending" | "synced" | "error" | "dry_run"
+  syncError   String?
+  date        String   // YYYY-MM-DD (so we can count daily progress)
+  createdAt   DateTime @default(now())
+
+  @@index([date])
+  @@index([syncStatus])
+}
+
+// Free-text notes from the dashboard textarea. Syncs to FUB's /notes endpoint.
+model Note {
+  id         Int      @id @default(autoincrement())
+  agentId    Int
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  body       String
+  fubNoteId  String?
+  syncStatus String   @default("pending")
+  syncError  String?
+  createdAt  DateTime @default(now())
+}
+
+// Status of each external data source. One row per source.
+model SyncStatus {
+  id           Int       @id @default(autoincrement())
+  source       String    @unique // "fub-people" | "fub-customfields" | "courted-pipeline" | "coops-smartlist"
+  lastRunAt    DateTime?
+  status       String    @default("idle") // "idle" | "running" | "ok" | "error"
+  itemCount    Int?
+  errorMessage String?
+  nextCursor   String?   // for chunked pagination across function invocations
+}
+
+// FUB custom field label → internal key map (e.g., "Birthday" → "customBirthday").
+// Loaded once per sync and cached for runtime field lookups.
+model FubCustomField {
+  label String @id
+  key   String
+}
+
+// Per-email Courted enrichment cache. 7-day TTL.
+model CourtedEnrichment {
+  email     String   @id
+  data      String   // JSON blob of the Courted agent record
+  fetchedAt DateTime @default(now())
+}
+
+// Daily Coops rotation snapshot — the 10 FUB Smart List 21 people picked for that date.
+model CoopsRotation {
+  date      String   @id // YYYY-MM-DD
+  agentIds  String   // JSON array of Agent.id values
+  createdAt DateTime @default(now())
+}
+
+// Generic key/value config. Replaces config.json entries that change at runtime.
+model Config {
+  key   String @id
+  value String
+}
